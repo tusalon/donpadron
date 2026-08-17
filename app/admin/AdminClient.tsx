@@ -174,7 +174,7 @@ export default function AdminClient({ displayName }: { displayName: string }) {
         <div className="admin-user">
           <span>{displayName}</span>
           {process.env.NODE_ENV !== "development" && (
-            <a href="/signout-with-chatgpt?return_to=/">Salir</a>
+            <a href="/api/admin-session?logout=1">Salir</a>
           )}
         </div>
       </header>

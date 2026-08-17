@@ -366,6 +366,13 @@ a { color: inherit; text-decoration: none; }
 .admin-access-card h1 { margin: 9px 0; font-size: 34px; letter-spacing: -0.06em; }
 .admin-access-card > p:not(.eyebrow) { color: var(--muted); line-height: 1.55; }
 .admin-access-card a { display: inline-block; margin-top: 12px; color: var(--red-dark); font-weight: 900; }
+.admin-login-card { width: min(440px, 100%); }
+.admin-login-form { margin-top: 24px; display: grid; gap: 10px; text-align: left; }
+.admin-login-form label { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+.admin-login-form input { width: 100%; min-height: 50px; padding: 0 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--paper); color: var(--ink); outline: 0; }
+.admin-login-form input:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.1); }
+.admin-login-form button { min-height: 50px; margin-top: 5px; border: 0; border-radius: 11px; background: var(--red); color: white; font-weight: 900; cursor: pointer; }
+.admin-login-error { margin-top: 18px; padding: 12px 14px; border: 1px solid rgba(227, 30, 36, 0.22); border-radius: 11px; background: #fff1ef; color: var(--red-dark); font-size: 12px; font-weight: 700; text-align: left; }
 
 @media (max-width: 980px) {
   .hero__content { grid-template-columns: 1fr 380px; }

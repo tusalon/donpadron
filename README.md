@@ -28,7 +28,7 @@ npm run dev
 npm run build
 ```
 
-En producción, define `ADMIN_EMAILS` con los correos autorizados para abrir `/admin`. Se pueden separar varios correos con comas.
+El panel `/admin` usa una contraseña propia del negocio. En producción configura `ADMIN_PASSWORD` y una clave aleatoria larga en `ADMIN_SESSION_SECRET`.
 
 ## APK para Android
 
