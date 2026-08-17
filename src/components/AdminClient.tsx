@@ -387,7 +387,7 @@ function formatQuantity(value: number) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-CU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(`${value.replace(" ", "T")}Z`));
+  return new Intl.DateTimeFormat("es-CU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 function urlBase64ToUint8Array(base64String: string) {
