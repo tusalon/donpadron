@@ -218,9 +218,15 @@ export default function Storefront() {
                 const lowStock = product.stock > 0 && product.stock <= 5;
                 return (
                   <article className={`product-card ${soldOut ? "is-sold-out" : ""}`} key={product.id}>
-                    <div className="product-art" style={{ "--product-accent": product.accent } as React.CSSProperties}>
+                    <div
+                      className={`product-art ${product.photoUrl ? "product-art--photo" : ""}`}
+                      style={{
+                        "--product-accent": product.accent,
+                        backgroundImage: product.photoUrl ? `url(${product.photoUrl})` : undefined,
+                      } as React.CSSProperties}
+                    >
                       <span className="product-art__number">0{index + 1}</span>
-                      <span className="product-art__emoji" role="img" aria-label="">{product.emoji}</span>
+                      {!product.photoUrl && <span className="product-art__emoji" role="img" aria-label="">{product.emoji}</span>}
                       <span className="product-art__stamp">HECHO<br />AQUÍ</span>
                     </div>
                     <div className="product-card__body">

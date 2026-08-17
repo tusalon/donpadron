@@ -11,6 +11,7 @@ export type Product = {
   minimumStep: number;
   emoji: string;
   accent: string;
+  photoUrl: string;
 };
 
 export type StoreSettings = {
@@ -93,6 +94,24 @@ function notifyNewOrder(displayId: string, totalCup: number) {
     .catch(() => {
       // El pedido ya se creó; si la notificación falla no afecta al cliente.
     });
+}
+
+export async function uploadProductPhoto(file: File): Promise<string> {
+  const cloudName = import.meta.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+  if (!cloudName || !uploadPreset) throw new Error("Falta configurar Cloudinary.");
+
+  const body = new FormData();
+  body.append("file", file);
+  body.append("upload_preset", uploadPreset);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: "POST",
+    body,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message ?? "No pudimos subir la imagen.");
+  return data.secure_url as string;
 }
 
 export async function saveAdminPushSubscription(token: string, subscription: PushSubscriptionJSON) {
@@ -188,6 +207,7 @@ function readableError(message: string, fallback: string) {
     "Producto no encontrado",
     "El identificador",
     "El color",
+    "La foto",
     "Completa nombre",
     "Ya existe",
     "La suscripción",

@@ -6,6 +6,7 @@ import {
   updateAdminOrder,
   updateAdminProduct,
   updateAdminSettings,
+  uploadProductPhoto,
   type AdminOrder,
   type AdminProduct,
   type StoreSettings,
@@ -31,6 +32,7 @@ const emptyProduct: AdminProduct = {
   minimumStep: 1,
   emoji: "🥩",
   accent: "#d92525",
+  photoUrl: "",
   active: true,
 };
 
@@ -48,6 +50,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [tab, setTab] = useState<"orders" | "inventory" | "settings">("orders");
   const [productDraft, setProductDraft] = useState<AdminProduct | null>(null);
   const [creatingProduct, setCreatingProduct] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -161,6 +164,22 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
 
   function updateProductDraft(changes: Partial<AdminProduct>) {
     setProductDraft((current) => current ? { ...current, ...changes } : current);
+  }
+
+  async function handleProductPhoto(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploadingPhoto(true);
+    setError("");
+    try {
+      const url = await uploadProductPhoto(file);
+      updateProductDraft({ photoUrl: url });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No pudimos subir la imagen.");
+    } finally {
+      setUploadingPhoto(false);
+    }
   }
 
   async function saveProductEditor(event: React.FormEvent<HTMLFormElement>) {
@@ -302,6 +321,12 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
                 <button type="button" onClick={() => setProductDraft(null)}>Cerrar</button>
               </div>
               <div className="product-editor__fields">
+                <label className="product-editor__wide product-editor__photo">
+                  <span>Foto del producto</span>
+                  {productDraft.photoUrl && <img src={productDraft.photoUrl} alt="" className="product-editor__photo-preview" />}
+                  <input type="file" accept="image/*" onChange={handleProductPhoto} disabled={uploadingPhoto} />
+                  {uploadingPhoto && <small>Subiendo…</small>}
+                </label>
                 <label><span>Nombre</span><input required value={productDraft.name} onChange={(event) => updateProductDraft({ name: event.target.value })} placeholder="Ej. Chorizo criollo" /></label>
                 <label><span>Categoría</span><input required list="product-categories" value={productDraft.category} onChange={(event) => updateProductDraft({ category: event.target.value })} placeholder="Preparados" /></label>
                 <label className="product-editor__wide"><span>Descripción</span><textarea value={productDraft.description} onChange={(event) => updateProductDraft({ description: event.target.value })} placeholder="Texto corto que verá el cliente." /></label>
@@ -314,7 +339,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
                 <label className="product-editor__check"><input type="checkbox" checked={productDraft.active} onChange={(event) => updateProductDraft({ active: event.target.checked })} /><span>Visible para clientes</span></label>
               </div>
               <div className="product-editor__actions">
-                <button className="button button--primary" type="submit" disabled={busy === "product-editor"}>{busy === "product-editor" ? "Guardando…" : "Guardar producto"}</button>
+                <button className="button button--primary" type="submit" disabled={busy === "product-editor" || uploadingPhoto}>{busy === "product-editor" ? "Guardando…" : "Guardar producto"}</button>
                 <button className="text-button" type="button" onClick={() => setProductDraft(null)}>Cancelar</button>
               </div>
               <datalist id="product-categories">
@@ -328,7 +353,14 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
             const rowDisabled = busy === product.id || busy === "product-editor" || isEditingThisRow;
             return (
             <article className="inventory-row" key={product.id}>
-              <div className="inventory-product"><span style={{ background: product.accent }}>{product.emoji}</span><div><strong>{product.name}</strong><small>{product.category} · {product.unit} · {formatCup(product.priceCup)}</small></div></div>
+              <div className="inventory-product">
+                {product.photoUrl ? (
+                  <img src={product.photoUrl} alt="" className="inventory-product__photo" />
+                ) : (
+                  <span style={{ background: product.accent }}>{product.emoji}</span>
+                )}
+                <div><strong>{product.name}</strong><small>{product.category} · {product.unit} · {formatCup(product.priceCup)}</small></div>
+              </div>
               <div className="stock-control" aria-label={`Existencia de ${product.name}`}>
                 <button disabled={rowDisabled || product.stock <= 0} onClick={() => updateProduct(product, { stock: Math.max(0, product.stock - product.minimumStep) })} aria-label="Restar existencia">−</button>
                 <strong>{formatQuantity(product.stock)}</strong>
