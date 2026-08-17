@@ -61,6 +61,8 @@ jobs:
           cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk Don-Padron-Admin.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Don-Padron.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Don-Padron-Admin.apk
+          echo "--- Huella del certificado (para assetlinks.json) ---"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs Don-Padron-Admin.apk
 
       - name: Guardar APK en la ejecución
         uses: actions/upload-artifact@v4
