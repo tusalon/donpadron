@@ -20,7 +20,7 @@ export type StoreSettings = {
   paymentCopy: string;
 };
 
-export type AdminProduct = Omit<Product, "description" | "accent"> & {
+export type AdminProduct = Product & {
   active: boolean;
 };
 
@@ -116,6 +116,20 @@ export async function updateAdminProduct(
   if (error) throw new Error(readableError(error.message, "No pudimos guardar el producto."));
 }
 
+export async function saveAdminProduct(
+  token: string,
+  product: AdminProduct,
+  isNew: boolean,
+): Promise<AdminProduct> {
+  const { data, error } = await supabase.rpc("admin_save_product", {
+    p_token: token,
+    p_product: product,
+    p_create: isNew,
+  });
+  if (error) throw new Error(readableError(error.message, "No pudimos guardar el producto."));
+  return data as AdminProduct;
+}
+
 export async function updateAdminOrder(token: string, orderId: string, status: string) {
   const { error } = await supabase.rpc("admin_update_order", {
     p_token: token,
@@ -148,6 +162,10 @@ function readableError(message: string, fallback: string) {
     "Solo quedan",
     "La sesión administrativa",
     "Producto no encontrado",
+    "El identificador",
+    "El color",
+    "Completa nombre",
+    "Ya existe",
     "Pedido no encontrado",
     "Un pedido cancelado",
     "Estado de pedido",

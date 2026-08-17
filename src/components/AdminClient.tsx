@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getAdminDashboard,
+  saveAdminProduct,
   updateAdminOrder,
   updateAdminProduct,
   updateAdminSettings,
@@ -18,6 +19,20 @@ const statusLabels: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
+const emptyProduct: AdminProduct = {
+  id: "",
+  name: "",
+  description: "",
+  category: "Preparados",
+  unit: "paquete",
+  priceCup: 0,
+  stock: 0,
+  minimumStep: 1,
+  emoji: "🥩",
+  accent: "#d92525",
+  active: true,
+};
+
 type AdminClientProps = {
   token: string;
   onLogout: () => void;
@@ -30,6 +45,8 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [settings, setSettings] = useState<StoreSettings>({ businessName: "Don Padrón", whatsappPhone: "", pickupAddress: "", paymentCopy: "" });
   const [tab, setTab] = useState<"orders" | "inventory" | "settings">("orders");
+  const [productDraft, setProductDraft] = useState<AdminProduct | null>(null);
+  const [creatingProduct, setCreatingProduct] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -79,6 +96,54 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
         active: next.active,
       });
       await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No pudimos guardar el producto.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function startNewProduct() {
+    setError("");
+    setCreatingProduct(true);
+    setProductDraft(emptyProduct);
+  }
+
+  function startEditProduct(product: AdminProduct) {
+    setError("");
+    setCreatingProduct(false);
+    setProductDraft({ ...product });
+  }
+
+  function updateProductDraft(changes: Partial<AdminProduct>) {
+    setProductDraft((current) => current ? { ...current, ...changes } : current);
+  }
+
+  async function saveProductEditor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!productDraft) return;
+
+    const productId = productDraft.id || slugifyProductName(productDraft.name);
+    const productToSave: AdminProduct = {
+      ...productDraft,
+      id: productId,
+      priceCup: Math.round(Number(productDraft.priceCup)),
+      stock: Number(productDraft.stock),
+      minimumStep: Number(productDraft.minimumStep),
+    };
+
+    setBusy("product-editor");
+    try {
+      const saved = await saveAdminProduct(token, productToSave, creatingProduct);
+      setProducts((current) => {
+        const next = current.some((item) => item.id === saved.id)
+          ? current.map((item) => (item.id === saved.id ? saved : item))
+          : [...current, saved];
+        return next.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+      });
+      setProductDraft(null);
+      setCreatingProduct(false);
+      setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No pudimos guardar el producto.");
     } finally {
@@ -175,18 +240,62 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
         </section>
       ) : tab === "inventory" ? (
         <section className="inventory-list" aria-label="Inventario">
-          {products.map((product) => (
-            <article className="inventory-row" key={product.id}>
-              <div className="inventory-product"><span>{product.emoji}</span><div><strong>{product.name}</strong><small>{product.unit} · {formatCup(product.priceCup)}</small></div></div>
-              <div className="stock-control" aria-label={`Existencia de ${product.name}`}>
-                <button disabled={busy === product.id || product.stock <= 0} onClick={() => updateProduct(product, { stock: Math.max(0, product.stock - product.minimumStep) })} aria-label="Restar existencia">−</button>
-                <strong>{formatQuantity(product.stock)}</strong>
-                <button disabled={busy === product.id} onClick={() => updateProduct(product, { stock: product.stock + product.minimumStep })} aria-label="Sumar existencia">+</button>
+          <div className="inventory-toolbar">
+            <div>
+              <p className="eyebrow">Productos del negocio</p>
+              <h2>Inventario</h2>
+            </div>
+            <button className="button button--primary" type="button" disabled={busy === "product-editor"} onClick={startNewProduct}>+ Nuevo producto</button>
+          </div>
+
+          {productDraft && (
+            <form className="product-editor" onSubmit={saveProductEditor}>
+              <div className="product-editor__head">
+                <div>
+                  <p className="eyebrow">{creatingProduct ? "Alta nueva" : "Editando producto"}</p>
+                  <h3>{creatingProduct ? "Nuevo producto" : productDraft.name}</h3>
+                </div>
+                <button type="button" onClick={() => setProductDraft(null)}>Cerrar</button>
               </div>
-              <label className="price-control"><span>Precio CUP</span><input type="number" min="0" step="1" defaultValue={product.priceCup} disabled={busy === product.id} onBlur={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 0 && value !== product.priceCup) void updateProduct(product, { priceCup: value }); }} /></label>
-              <button className={`availability-toggle ${product.active ? "is-on" : ""}`} disabled={busy === product.id} onClick={() => updateProduct(product, { active: !product.active })}>{product.active ? "Visible" : "Oculto"}</button>
+              <div className="product-editor__fields">
+                <label><span>Nombre</span><input required value={productDraft.name} onChange={(event) => updateProductDraft({ name: event.target.value })} placeholder="Ej. Chorizo criollo" /></label>
+                <label><span>Categoría</span><input required list="product-categories" value={productDraft.category} onChange={(event) => updateProductDraft({ category: event.target.value })} placeholder="Preparados" /></label>
+                <label className="product-editor__wide"><span>Descripción</span><textarea value={productDraft.description} onChange={(event) => updateProductDraft({ description: event.target.value })} placeholder="Texto corto que verá el cliente." /></label>
+                <label><span>Unidad</span><input required value={productDraft.unit} onChange={(event) => updateProductDraft({ unit: event.target.value })} placeholder="paquete de 500 g" /></label>
+                <label><span>Precio CUP</span><input required type="number" min="0" step="1" value={productDraft.priceCup} onChange={(event) => updateProductDraft({ priceCup: Number(event.target.value) })} /></label>
+                <label><span>Existencia</span><input required type="number" min="0" step="0.001" value={productDraft.stock} onChange={(event) => updateProductDraft({ stock: Number(event.target.value) })} /></label>
+                <label><span>Paso de venta</span><input required type="number" min="0.001" step="0.001" value={productDraft.minimumStep} onChange={(event) => updateProductDraft({ minimumStep: Number(event.target.value) })} /></label>
+                <label><span>Icono</span><input value={productDraft.emoji} onChange={(event) => updateProductDraft({ emoji: event.target.value })} maxLength={8} /></label>
+                <label><span>Color</span><input type="color" value={productDraft.accent} onChange={(event) => updateProductDraft({ accent: event.target.value })} /></label>
+                <label className="product-editor__check"><input type="checkbox" checked={productDraft.active} onChange={(event) => updateProductDraft({ active: event.target.checked })} /><span>Visible para clientes</span></label>
+              </div>
+              <div className="product-editor__actions">
+                <button className="button button--primary" type="submit" disabled={busy === "product-editor"}>{busy === "product-editor" ? "Guardando…" : "Guardar producto"}</button>
+                <button className="text-button" type="button" onClick={() => setProductDraft(null)}>Cancelar</button>
+              </div>
+              <datalist id="product-categories">
+                {Array.from(new Set(products.map((product) => product.category))).map((category) => <option value={category} key={category} />)}
+              </datalist>
+            </form>
+          )}
+
+          {products.map((product) => {
+            const isEditingThisRow = productDraft !== null && productDraft.id === product.id;
+            const rowDisabled = busy === product.id || busy === "product-editor" || isEditingThisRow;
+            return (
+            <article className="inventory-row" key={product.id}>
+              <div className="inventory-product"><span style={{ background: product.accent }}>{product.emoji}</span><div><strong>{product.name}</strong><small>{product.category} · {product.unit} · {formatCup(product.priceCup)}</small></div></div>
+              <div className="stock-control" aria-label={`Existencia de ${product.name}`}>
+                <button disabled={rowDisabled || product.stock <= 0} onClick={() => updateProduct(product, { stock: Math.max(0, product.stock - product.minimumStep) })} aria-label="Restar existencia">−</button>
+                <strong>{formatQuantity(product.stock)}</strong>
+                <button disabled={rowDisabled} onClick={() => updateProduct(product, { stock: product.stock + product.minimumStep })} aria-label="Sumar existencia">+</button>
+              </div>
+              <label className="price-control"><span>Precio CUP</span><input type="number" min="0" step="1" defaultValue={product.priceCup} disabled={rowDisabled} onBlur={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 0 && value !== product.priceCup) void updateProduct(product, { priceCup: value }); }} /></label>
+              <button className="edit-product-button" type="button" disabled={rowDisabled} onClick={() => startEditProduct(product)}>Editar</button>
+              <button className={`availability-toggle ${product.active ? "is-on" : ""}`} disabled={rowDisabled} onClick={() => updateProduct(product, { active: !product.active })}>{product.active ? "Visible" : "Oculto"}</button>
             </article>
-          ))}
+            );
+          })}
           <p className="inventory-note">Cada pedido nuevo rebaja estas existencias. Si cancelas, las unidades regresan automáticamente.</p>
         </section>
       ) : (
@@ -215,4 +324,15 @@ function formatQuantity(value: number) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("es-CU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(`${value.replace(" ", "T")}Z`));
+}
+
+function slugifyProductName(value: string) {
+  const slug = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 56);
+  return slug || `producto-${Date.now()}`;
 }
