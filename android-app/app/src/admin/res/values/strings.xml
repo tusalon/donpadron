@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="asset_statements">
+        [{
+          \"relation\": [\"delegate_permission/common.handle_all_urls\", \"delegate_permission/common.use_as_origin\"],
+          \"target\": {
+            \"namespace\": \"android_app\",
+            \"package_name\": \"cu.donpadron.admin\",
+            \"sha256_cert_fingerprints\": [\"D7:C6:E4:2F:41:9F:96:9F:AE:ED:49:A1:0E:26:98:B2:9A:0F:7B:91:61:AD:A7:70:36:FF:FF:22:5A:67:3C:F5\"]
+          }
+        }]
+    </string>
+</resources>

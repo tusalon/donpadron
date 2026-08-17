@@ -66,3 +66,7 @@ android {
         buildConfig true
     }
 }
+
+dependencies {
+    adminImplementation "com.meta.androidbrowserhelper:androidbrowserhelper:2.5.0"
+}
