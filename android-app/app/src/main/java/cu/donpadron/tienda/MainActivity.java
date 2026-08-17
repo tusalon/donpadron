@@ -4,12 +4,15 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -25,7 +28,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String STORE_URL = "https://don-padron.leetomy437.chatgpt.site/";
     private static final String STORE_HOST = "don-padron.leetomy437.chatgpt.site";
 
     private WebView webView;
@@ -55,10 +57,11 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT
         ));
 
+        applySystemBarInsets(root);
         setContentView(root);
 
         if (savedInstanceState == null) {
-            webView.loadUrl(STORE_URL);
+            webView.loadUrl(BuildConfig.START_URL);
         } else {
             webView.restoreState(savedInstanceState);
         }
@@ -79,7 +82,7 @@ public class MainActivity extends Activity {
         settings.setUserAgentString(settings.getUserAgentString() + " DonPadronAndroid/1.0");
 
         CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, BuildConfig.ADMIN_MODE);
 
         webView.setWebViewClient(new StoreWebViewClient());
         webView.setWebChromeClient(new WebChromeClient() {
@@ -96,14 +99,14 @@ public class MainActivity extends Activity {
                 popup.setWebViewClient(new WebViewClient() {
                     @Override
                     public boolean shouldOverrideUrlLoading(WebView popupView, WebResourceRequest request) {
-                        openExternal(request.getUrl());
+                        openPopupUrl(request.getUrl());
                         popupView.destroy();
                         return true;
                     }
 
                     @Override
                     public boolean shouldOverrideUrlLoading(WebView popupView, String url) {
-                        openExternal(Uri.parse(url));
+                        openPopupUrl(Uri.parse(url));
                         popupView.destroy();
                         return true;
                     }
@@ -115,6 +118,22 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
+    }
+
+    private void applySystemBarInsets(View root) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return;
+        }
+
+        getWindow().setDecorFitsSystemWindows(false);
+        root.setOnApplyWindowInsetsListener((view, windowInsets) -> {
+            Insets safeArea = windowInsets.getInsets(
+                WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
+            );
+            view.setPadding(safeArea.left, safeArea.top, safeArea.right, safeArea.bottom);
+            return windowInsets;
+        });
+        root.requestApplyInsets();
     }
 
     private View createLoadingView() {
@@ -130,7 +149,7 @@ public class MainActivity extends Activity {
         loading.addView(logo, new LinearLayout.LayoutParams(logoSize, logoSize));
 
         TextView title = new TextView(this);
-        title.setText("DON PADRÓN");
+        title.setText(BuildConfig.ADMIN_MODE ? "DON PADRÓN ADMIN" : "DON PADRÓN");
         title.setTextColor(Color.rgb(28, 20, 16));
         title.setTextSize(28);
         title.setGravity(Gravity.CENTER);
@@ -143,7 +162,7 @@ public class MainActivity extends Activity {
         loading.addView(title, titleParams);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Abriendo la tienda...");
+        subtitle.setText(BuildConfig.ADMIN_MODE ? "Abriendo la administración..." : "Abriendo la tienda...");
         subtitle.setTextColor(Color.rgb(113, 104, 96));
         subtitle.setTextSize(16);
         subtitle.setGravity(Gravity.CENTER);
@@ -166,11 +185,27 @@ public class MainActivity extends Activity {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private boolean isStoreUrl(Uri uri) {
+    private boolean shouldOpenInside(Uri uri) {
         String scheme = uri.getScheme();
         String host = uri.getHost();
-        return ("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))
-            && STORE_HOST.equalsIgnoreCase(host);
+        boolean isWebUrl = "https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme);
+        if (!isWebUrl) {
+            return false;
+        }
+
+        if (BuildConfig.ADMIN_MODE) {
+            return "https".equalsIgnoreCase(scheme);
+        }
+
+        return STORE_HOST.equalsIgnoreCase(host);
+    }
+
+    private void openPopupUrl(Uri uri) {
+        if (BuildConfig.ADMIN_MODE && shouldOpenInside(uri)) {
+            webView.loadUrl(uri.toString());
+            return;
+        }
+        openExternal(uri);
     }
 
     private void openExternal(Uri uri) {
@@ -187,8 +222,8 @@ public class MainActivity extends Activity {
             + "main{padding:32px;max-width:360px}h1{font-size:28px;margin:0 0 12px}p{color:#716860;line-height:1.55;margin:0 0 24px}"
             + "a{display:inline-flex;min-height:50px;align-items:center;padding:0 24px;border-radius:12px;background:#e31e24;color:white;text-decoration:none;font-weight:700}</style></head>"
             + "<body><main><h1>Sin conexión</h1><p>Revisa los datos móviles o el Wi-Fi y vuelve a intentarlo.</p>"
-            + "<a href='" + STORE_URL + "'>Volver a intentar</a></main></body></html>";
-        webView.loadDataWithBaseURL(STORE_URL, html, "text/html", "UTF-8", null);
+            + "<a href='" + BuildConfig.START_URL + "'>Volver a intentar</a></main></body></html>";
+        webView.loadDataWithBaseURL(BuildConfig.START_URL, html, "text/html", "UTF-8", null);
     }
 
     @Override
@@ -218,7 +253,7 @@ public class MainActivity extends Activity {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();
-            if (isStoreUrl(uri)) {
+            if (shouldOpenInside(uri)) {
                 return false;
             }
             openExternal(uri);
@@ -228,7 +263,7 @@ public class MainActivity extends Activity {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
             Uri uri = Uri.parse(url);
-            if (isStoreUrl(uri)) {
+            if (shouldOpenInside(uri)) {
                 return false;
             }
             openExternal(uri);

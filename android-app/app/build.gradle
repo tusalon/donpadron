@@ -10,11 +10,29 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId "cu.donpadron.tienda"
+        applicationId "cu.donpadron"
         minSdk 23
         targetSdk 35
         versionCode buildNumber
         versionName "1.0.${buildNumber}"
+    }
+
+    flavorDimensions "mode"
+    productFlavors {
+        client {
+            dimension "mode"
+            applicationIdSuffix ".tienda"
+            manifestPlaceholders = [appLabel: "Don Padrón"]
+            buildConfigField "String", "START_URL", '"https://don-padron.leetomy437.chatgpt.site/"'
+            buildConfigField "boolean", "ADMIN_MODE", "false"
+        }
+        admin {
+            dimension "mode"
+            applicationIdSuffix ".admin"
+            manifestPlaceholders = [appLabel: "Don Padrón Admin"]
+            buildConfigField "String", "START_URL", '"https://don-padron.leetomy437.chatgpt.site/admin"'
+            buildConfigField "boolean", "ADMIN_MODE", "true"
+        }
     }
 
     if (keystorePath) {
@@ -42,5 +60,9 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 }

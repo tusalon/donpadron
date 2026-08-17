@@ -46,35 +46,39 @@ jobs:
           test -n "$ANDROID_KEYSTORE_BASE64"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android-app/release.keystore
 
-      - name: Compilar APK firmada
+      - name: Compilar APK de clientes y administración
         working-directory: android-app
         env:
           ANDROID_KEYSTORE_PATH: ../release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: gradle --no-daemon :app:assembleRelease
+        run: gradle --no-daemon :app:assembleClientRelease :app:assembleAdminRelease
 
       - name: Preparar descarga
         run: |
-          cp android-app/app/build/outputs/apk/release/app-release.apk Don-Padron.apk
+          cp android-app/app/build/outputs/apk/client/release/app-client-release.apk Don-Padron.apk
+          cp android-app/app/build/outputs/apk/admin/release/app-admin-release.apk Don-Padron-Admin.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Don-Padron.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Don-Padron-Admin.apk
 
       - name: Guardar APK en la ejecución
         uses: actions/upload-artifact@v4
         with:
           name: Don-Padron-Android
-          path: Don-Padron.apk
+          path: |
+            Don-Padron.apk
+            Don-Padron-Admin.apk
           if-no-files-found: error
 
       - name: Publicar enlace estable en GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES='Aplicación Android de Don Padrón. Instálala para consultar productos, comprobar disponibilidad y realizar pedidos.'
+          NOTES='Dos aplicaciones Android de Don Padrón: Don-Padron.apk para clientes y Don-Padron-Admin.apk para administrar productos, existencias y pedidos.'
           if gh release view android-latest >/dev/null 2>&1; then
-            gh release upload android-latest Don-Padron.apk --clobber
+            gh release upload android-latest Don-Padron.apk Don-Padron-Admin.apk --clobber
             gh release edit android-latest --title 'Don Padrón para Android' --notes "$NOTES" --latest
           else
-            gh release create android-latest Don-Padron.apk --target "$GITHUB_SHA" --title 'Don Padrón para Android' --notes "$NOTES" --latest
+            gh release create android-latest Don-Padron.apk Don-Padron-Admin.apk --target "$GITHUB_SHA" --title 'Don Padrón para Android' --notes "$NOTES" --latest
           fi
