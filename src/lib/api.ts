@@ -82,7 +82,31 @@ export async function getCatalog(): Promise<Catalog> {
 export async function placeOrder(payload: OrderPayload): Promise<CreatedOrder> {
   const { data, error } = await supabase.rpc("place_order", { p_payload: payload });
   if (error) throw new Error(readableError(error.message, "No pudimos crear el pedido."));
-  return data as CreatedOrder;
+  const order = data as CreatedOrder;
+  void notifyNewOrder(order.order.displayId, order.order.totalCup);
+  return order;
+}
+
+function notifyNewOrder(displayId: string, totalCup: number) {
+  return supabase.functions
+    .invoke("notify-new-order", { body: { displayId, totalCup } })
+    .catch(() => {
+      // El pedido ya se creó; si la notificación falla no afecta al cliente.
+    });
+}
+
+export async function saveAdminPushSubscription(token: string, subscription: PushSubscriptionJSON) {
+  const keys = subscription.keys;
+  if (!subscription.endpoint || !keys?.p256dh || !keys.auth) {
+    throw new Error("La suscripción de notificaciones no es válida.");
+  }
+  const { error } = await supabase.rpc("admin_save_push_subscription", {
+    p_token: token,
+    p_endpoint: subscription.endpoint,
+    p_p256dh: keys.p256dh,
+    p_auth: keys.auth,
+  });
+  if (error) throw new Error(readableError(error.message, "No pudimos activar las notificaciones."));
 }
 
 export async function adminLogin(password: string): Promise<string> {
@@ -166,6 +190,7 @@ function readableError(message: string, fallback: string) {
     "El color",
     "Completa nombre",
     "Ya existe",
+    "La suscripción",
     "Pedido no encontrado",
     "Un pedido cancelado",
     "Estado de pedido",

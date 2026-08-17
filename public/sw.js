@@ -20,6 +20,34 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+self.addEventListener("push", (event) => {
+  let data = { title: "Don Padrón", body: "Tienes una notificación nueva." };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch {
+    // Ignora payloads que no sean JSON.
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: `${APP_ROOT}don-padron-icon.png`,
+      badge: `${APP_ROOT}don-padron-icon.png`,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const adminUrl = `${self.location.origin}${APP_ROOT}#/admin`;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => client.url.startsWith(adminUrl));
+      if (existing) return existing.focus();
+      return self.clients.openWindow(adminUrl);
+    }),
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);

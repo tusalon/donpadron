@@ -40,6 +40,7 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://gcfmccszyroygwvjkxkc.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_v4rKabInNEwkZ5p3Kdp-XA_CV-n0NHM
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: BHorj5Ms-sVltKiyxHvaYMs09GmX00t73WSmgJ-I4IidW6zJCEVdRpW5haJbAvVkZCgdjy4MykgsctLjj3nhzXg
         run: npm run build
 
       - name: Configurar GitHub Pages

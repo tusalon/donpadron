@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getAdminDashboard,
   saveAdminProduct,
+  saveAdminPushSubscription,
   updateAdminOrder,
   updateAdminProduct,
   updateAdminSettings,
@@ -50,6 +51,49 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [pushState, setPushState] = useState<"checking" | "unsupported" | "denied" | "off" | "on" | "busy">("checking");
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPushState("unsupported");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setPushState("denied");
+      return;
+    }
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((subscription) => setPushState(subscription ? "on" : "off"))
+      .catch(() => setPushState("off"));
+  }, []);
+
+  async function enablePushNotifications() {
+    setPushState("busy");
+    setError("");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushState(permission === "denied" ? "denied" : "off");
+        return;
+      }
+      const vapidKey = import.meta.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) throw new Error("Falta configurar la clave pública de notificaciones.");
+      const registration = await navigator.serviceWorker.ready;
+      const subscription =
+        (await registration.pushManager.getSubscription()) ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        }));
+      await saveAdminPushSubscription(token, subscription.toJSON());
+      setPushState("on");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No pudimos activar las notificaciones.");
+      setPushState("off");
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -299,16 +343,36 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
           <p className="inventory-note">Cada pedido nuevo rebaja estas existencias. Si cancelas, las unidades regresan automáticamente.</p>
         </section>
       ) : (
-        <form className="settings-panel" onSubmit={saveSettings}>
-          <div className="settings-panel__intro"><p className="eyebrow">Datos que verá el cliente</p><h2>Información del punto</h2><p>Configura el teléfono de WhatsApp, la recogida y cómo se paga.</p></div>
-          <div className="settings-fields">
-            <label><span>Nombre del negocio</span><input required value={settings.businessName} onChange={(event) => setSettings({ ...settings, businessName: event.target.value })} /></label>
-            <label><span>WhatsApp con código de país</span><input value={settings.whatsappPhone} onChange={(event) => setSettings({ ...settings, whatsappPhone: event.target.value })} inputMode="tel" placeholder="Ej. 5351234567" /><small>Si lo dejas vacío, WhatsApp permitirá elegir el contacto.</small></label>
-            <label><span>Dirección para recoger</span><textarea required value={settings.pickupAddress} onChange={(event) => setSettings({ ...settings, pickupAddress: event.target.value })} /></label>
-            <label><span>Información de pago</span><textarea required value={settings.paymentCopy} onChange={(event) => setSettings({ ...settings, paymentCopy: event.target.value })} placeholder="Explica las formas de pago y cuándo se comparten los datos." /></label>
+        <>
+          <form className="settings-panel" onSubmit={saveSettings}>
+            <div className="settings-panel__intro"><p className="eyebrow">Datos que verá el cliente</p><h2>Información del punto</h2><p>Configura el teléfono de WhatsApp, la recogida y cómo se paga.</p></div>
+            <div className="settings-fields">
+              <label><span>Nombre del negocio</span><input required value={settings.businessName} onChange={(event) => setSettings({ ...settings, businessName: event.target.value })} /></label>
+              <label><span>WhatsApp con código de país</span><input value={settings.whatsappPhone} onChange={(event) => setSettings({ ...settings, whatsappPhone: event.target.value })} inputMode="tel" placeholder="Ej. 5351234567" /><small>Si lo dejas vacío, WhatsApp permitirá elegir el contacto.</small></label>
+              <label><span>Dirección para recoger</span><textarea required value={settings.pickupAddress} onChange={(event) => setSettings({ ...settings, pickupAddress: event.target.value })} /></label>
+              <label><span>Información de pago</span><textarea required value={settings.paymentCopy} onChange={(event) => setSettings({ ...settings, paymentCopy: event.target.value })} placeholder="Explica las formas de pago y cuándo se comparten los datos." /></label>
+            </div>
+            <button className="button button--primary" type="submit" disabled={busy === "settings"}>{busy === "settings" ? "Guardando…" : "Guardar datos"}</button>
+          </form>
+
+          <div className="settings-panel">
+            <div className="settings-panel__intro"><p className="eyebrow">Avisos en este dispositivo</p><h2>Notificaciones de pedidos</h2><p>Recibe un aviso al instante cuando entre un pedido nuevo, sin tener el panel abierto.</p></div>
+            {pushState === "unsupported" ? (
+              <p className="inventory-note">Este navegador no admite notificaciones push.</p>
+            ) : pushState === "denied" ? (
+              <p className="inventory-note">Bloqueaste los avisos para este sitio. Actívalos desde los permisos del navegador y recarga la página.</p>
+            ) : (
+              <button
+                className="button button--primary"
+                type="button"
+                disabled={pushState === "busy" || pushState === "on" || pushState === "checking"}
+                onClick={enablePushNotifications}
+              >
+                {pushState === "on" ? "Notificaciones activadas" : pushState === "busy" ? "Activando…" : "Activar notificaciones"}
+              </button>
+            )}
           </div>
-          <button className="button button--primary" type="submit" disabled={busy === "settings"}>{busy === "settings" ? "Guardando…" : "Guardar datos"}</button>
-        </form>
+        </>
       )}
     </main>
   );
@@ -324,6 +388,13 @@ function formatQuantity(value: number) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("es-CU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(`${value.replace(" ", "T")}Z`));
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
 function slugifyProductName(value: string) {
