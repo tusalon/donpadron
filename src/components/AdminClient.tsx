@@ -321,12 +321,12 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
                 <button type="button" onClick={() => setProductDraft(null)}>Cerrar</button>
               </div>
               <div className="product-editor__fields">
-                <label className="product-editor__wide product-editor__photo">
+                <div className="product-editor__wide product-editor__photo">
                   <span>Foto del producto</span>
                   {productDraft.photoUrl && <img src={productDraft.photoUrl} alt="" className="product-editor__photo-preview" />}
                   <input type="file" accept="image/*" onChange={handleProductPhoto} disabled={uploadingPhoto} />
                   {uploadingPhoto && <small>Subiendo…</small>}
-                </label>
+                </div>
                 <label><span>Nombre</span><input required value={productDraft.name} onChange={(event) => updateProductDraft({ name: event.target.value })} placeholder="Ej. Chorizo criollo" /></label>
                 <label><span>Categoría</span><input required list="product-categories" value={productDraft.category} onChange={(event) => updateProductDraft({ category: event.target.value })} placeholder="Preparados" /></label>
                 <label className="product-editor__wide"><span>Descripción</span><textarea value={productDraft.description} onChange={(event) => updateProductDraft({ description: event.target.value })} placeholder="Texto corto que verá el cliente." /></label>
