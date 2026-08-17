@@ -38,3 +38,9 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+
+# Android
+/android-app/.gradle/
+/android-app/app/build/
+/android-app/release.keystore
+/.signing/
