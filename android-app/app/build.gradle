@@ -23,14 +23,14 @@ android {
             dimension "mode"
             applicationIdSuffix ".tienda"
             manifestPlaceholders = [appLabel: "Don Padrón"]
-            buildConfigField "String", "START_URL", '"https://don-padron.leetomy437.chatgpt.site/"'
+            buildConfigField "String", "START_URL", '"https://tusalon.github.io/donpadron/"'
             buildConfigField "boolean", "ADMIN_MODE", "false"
         }
         admin {
             dimension "mode"
             applicationIdSuffix ".admin"
             manifestPlaceholders = [appLabel: "Don Padrón Admin"]
-            buildConfigField "String", "START_URL", '"https://don-padron.leetomy437.chatgpt.site/admin"'
+            buildConfigField "String", "START_URL", '"https://tusalon.github.io/donpadron/#/admin"'
             buildConfigField "boolean", "ADMIN_MODE", "true"
         }
     }

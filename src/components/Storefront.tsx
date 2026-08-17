@@ -1,27 +1,5 @@
-"use client";
-
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-
-type Product = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  unit: string;
-  priceCup: number;
-  stock: number;
-  minimumStep: number;
-  emoji: string;
-  accent: string;
-};
-
-type StoreSettings = {
-  businessName: string;
-  whatsappPhone: string;
-  pickupAddress: string;
-  paymentCopy: string;
-};
+import { getCatalog, placeOrder, type Product, type StoreSettings } from "../lib/api";
 
 type Cart = Record<string, number>;
 
@@ -50,6 +28,7 @@ const defaultCheckout: Checkout = {
 };
 
 export default function Storefront() {
+  const logoUrl = `${import.meta.env.BASE_URL}don-padron-icon.png`;
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [cart, setCart] = useState<Cart>({});
@@ -65,13 +44,7 @@ export default function Storefront() {
 
   async function loadCatalog() {
     try {
-      const response = await fetch("/api/catalog", { cache: "no-store" });
-      const data = (await response.json()) as {
-        products?: Product[];
-        settings?: StoreSettings;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(data.error ?? "No pudimos cargar los productos.");
+      const data = await getCatalog();
       setProducts(data.products ?? []);
       setSettings(data.settings ?? null);
       setError("");
@@ -83,6 +56,8 @@ export default function Storefront() {
   }
 
   useEffect(() => {
+    // La carga inicial sincroniza el catálogo con la base remota.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadCatalog();
   }, []);
 
@@ -141,23 +116,12 @@ export default function Storefront() {
     setSubmitting(true);
     setError("");
     try {
-      const response = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...checkout,
-          items: cartItems.map((item) => ({ productId: item.id, quantity: item.quantity })),
-        }),
+      const data = await placeOrder({
+        ...checkout,
+        items: cartItems.map((item) => ({ productId: item.id, quantity: item.quantity })),
       });
-      const data = (await response.json()) as {
-        order?: { displayId: string; totalCup: number };
-        whatsappUrl?: string;
-        error?: string;
-      };
-      if (!response.ok || !data.order || !data.whatsappUrl) {
-        throw new Error(data.error ?? "No pudimos crear el pedido.");
-      }
-      setCompletedOrder({ ...data.order, whatsappUrl: data.whatsappUrl });
+      const whatsappUrl = createWhatsappUrl(data, checkout, cartItems);
+      setCompletedOrder({ ...data.order, whatsappUrl });
       setCart({});
       await loadCatalog();
     } catch (caught) {
@@ -178,7 +142,7 @@ export default function Storefront() {
       <header className="site-header">
         <div className="site-header__inner">
           <a href="#inicio" className="brand-lockup" aria-label="Don Padrón, inicio">
-            <img src="/don-padron-icon.png" alt="" />
+            <img src={logoUrl} alt="" />
             <span>
               <strong>Don Padrón</strong>
               <small>Elaborados cárnicos</small>
@@ -212,7 +176,7 @@ export default function Storefront() {
               <div className="hero-orbit hero-orbit--one" />
               <div className="hero-orbit hero-orbit--two" />
               <div className="hero-logo-card">
-                <img src="/don-padron-icon.png" alt="Ícono rojo de compras de Don Padrón" />
+                <img src={logoUrl} alt="Ícono rojo de compras de Don Padrón" />
                 <span>Tu pedido, directo del punto.</span>
               </div>
               <div className="hero-floating-note hero-floating-note--stock"><b>18</b><span>paquetes<br />disponibles</span></div>
@@ -303,9 +267,9 @@ export default function Storefront() {
       </main>
 
       <footer className="site-footer">
-        <div className="brand-lockup brand-lockup--footer"><img src="/don-padron-icon.png" alt="" /><span><strong>Don Padrón</strong><small>Elaborados cárnicos</small></span></div>
+        <div className="brand-lockup brand-lockup--footer"><img src={logoUrl} alt="" /><span><strong>Don Padrón</strong><small>Elaborados cárnicos</small></span></div>
         <p>Productos hechos con cuidado para resolver tu mesa.</p>
-        <div><span>© 2026 Don Padrón</span><Link href="/admin">Acceso del negocio</Link></div>
+        <div><span>© 2026 Don Padrón</span><a href="#/admin">Acceso del negocio</a></div>
       </footer>
 
       {cartCount > 0 && !cartOpen && !checkoutOpen && (
@@ -354,4 +318,28 @@ function formatCup(value: number) {
 
 function formatQuantity(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function createWhatsappUrl(
+  result: Awaited<ReturnType<typeof placeOrder>>,
+  checkout: Checkout,
+  items: Array<Product & { quantity: number }>,
+) {
+  const message = [
+    `Hola, quiero confirmar mi pedido ${result.order.displayId}.`,
+    "",
+    ...items.map((item) =>
+      `• ${formatQuantity(item.quantity)} × ${item.name} — ${formatCup(item.priceCup * item.quantity)}`,
+    ),
+    "",
+    `Total: ${formatCup(result.order.totalCup)}`,
+    `Cliente: ${checkout.customerName}`,
+    `Teléfono: ${checkout.phone}`,
+    `Entrega: ${checkout.deliveryMethod === "domicilio" ? `Domicilio — ${checkout.address}` : `Recoger en ${result.settings.pickupAddress || "el punto"}`}`,
+    `Pago: ${checkout.paymentMethod}`,
+    result.settings.paymentCopy ? `Indicaciones de pago: ${result.settings.paymentCopy}` : "",
+    checkout.notes ? `Nota: ${checkout.notes}` : "",
+  ].filter(Boolean).join("\n");
+  const phone = result.settings.whatsappPhone.replace(/\D/g, "");
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }

@@ -2,13 +2,14 @@
   "name": "Don Padrón",
   "short_name": "Don Padrón",
   "description": "Catálogo y pedidos de elaborados cárnicos.",
-  "start_url": "/",
+  "start_url": "/donpadron/",
+  "scope": "/donpadron/",
   "display": "standalone",
   "background_color": "#f7f2e8",
   "theme_color": "#e31e24",
   "icons": [
     {
-      "src": "/don-padron-icon.png",
+      "src": "/donpadron/don-padron-icon.png",
       "sizes": "1250x1250",
       "type": "image/png",
       "purpose": "any maskable"

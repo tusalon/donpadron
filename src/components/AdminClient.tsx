@@ -1,47 +1,13 @@
-"use client";
-
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-type AdminProduct = {
-  id: string;
-  name: string;
-  category: string;
-  unit: string;
-  priceCup: number;
-  stock: number;
-  minimumStep: number;
-  emoji: string;
-  active: number;
-};
-
-type AdminOrder = {
-  id: string;
-  displayId: string;
-  customerName: string;
-  phone: string;
-  deliveryMethod: string;
-  address: string;
-  paymentMethod: string;
-  notes: string;
-  totalCup: number;
-  status: string;
-  createdAt: string;
-  items: Array<{
-    id: number;
-    productName: string;
-    quantity: number;
-    unit: string;
-    subtotalCup: number;
-  }>;
-};
-
-type AdminSettings = {
-  businessName: string;
-  whatsappPhone: string;
-  pickupAddress: string;
-  paymentCopy: string;
-};
+import {
+  getAdminDashboard,
+  updateAdminOrder,
+  updateAdminProduct,
+  updateAdminSettings,
+  type AdminOrder,
+  type AdminProduct,
+  type StoreSettings,
+} from "../lib/api";
 
 const statusLabels: Record<string, string> = {
   pendiente: "Pendiente",
@@ -52,10 +18,17 @@ const statusLabels: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
-export default function AdminClient({ displayName }: { displayName: string }) {
+type AdminClientProps = {
+  token: string;
+  onLogout: () => void;
+  onSessionExpired: () => void;
+};
+
+export default function AdminClient({ token, onLogout, onSessionExpired }: AdminClientProps) {
+  const logoUrl = `${import.meta.env.BASE_URL}don-padron-icon.png`;
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [settings, setSettings] = useState<AdminSettings>({ businessName: "Don Padrón", whatsappPhone: "", pickupAddress: "", paymentCopy: "" });
+  const [settings, setSettings] = useState<StoreSettings>({ businessName: "Don Padrón", whatsappPhone: "", pickupAddress: "", paymentCopy: "" });
   const [tab, setTab] = useState<"orders" | "inventory" | "settings">("orders");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -63,26 +36,23 @@ export default function AdminClient({ displayName }: { displayName: string }) {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/admin", { cache: "no-store" });
-      const data = (await response.json()) as {
-        products?: AdminProduct[];
-        orders?: AdminOrder[];
-        settings?: AdminSettings;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(data.error ?? "No pudimos cargar el panel.");
+      const data = await getAdminDashboard(token);
       setProducts(data.products ?? []);
       setOrders(data.orders ?? []);
       if (data.settings) setSettings(data.settings);
       setError("");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "No pudimos cargar el panel.");
+      const message = caught instanceof Error ? caught.message : "No pudimos cargar el panel.";
+      if (message.startsWith("La sesión administrativa")) onSessionExpired();
+      else setError(message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onSessionExpired, token]);
 
   useEffect(() => {
+    // La carga inicial sincroniza la interfaz con la base remota.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -102,19 +72,12 @@ export default function AdminClient({ displayName }: { displayName: string }) {
     const next = { ...product, ...changes };
     setBusy(product.id);
     try {
-      const response = await fetch("/api/admin", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          type: "product",
-          productId: product.id,
-          stock: next.stock,
-          priceCup: next.priceCup,
-          active: Boolean(next.active),
-        }),
+      await updateAdminProduct(token, {
+        id: product.id,
+        stock: next.stock,
+        priceCup: next.priceCup,
+        active: next.active,
       });
-      const data = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? "No pudimos guardar el producto.");
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No pudimos guardar el producto.");
@@ -126,13 +89,7 @@ export default function AdminClient({ displayName }: { displayName: string }) {
   async function updateOrder(order: AdminOrder, status: string) {
     setBusy(order.id);
     try {
-      const response = await fetch("/api/admin", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ type: "order", orderId: order.id, status }),
-      });
-      const data = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? "No pudimos actualizar el pedido.");
+      await updateAdminOrder(token, order.id, status);
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No pudimos actualizar el pedido.");
@@ -145,13 +102,7 @@ export default function AdminClient({ displayName }: { displayName: string }) {
     event.preventDefault();
     setBusy("settings");
     try {
-      const response = await fetch("/api/admin", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ type: "settings", ...settings }),
-      });
-      const data = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? "No pudimos guardar los datos.");
+      await updateAdminSettings(token, settings);
       setError("");
       await load();
     } catch (caught) {
@@ -164,18 +115,16 @@ export default function AdminClient({ displayName }: { displayName: string }) {
   return (
     <main className="admin-shell">
       <header className="admin-topbar">
-        <Link href="/" className="brand-lockup brand-lockup--small">
-          <img src="/don-padron-icon.png" alt="" />
+        <a href="#inicio" className="brand-lockup brand-lockup--small">
+          <img src={logoUrl} alt="" />
           <span>
             <strong>Don Padrón</strong>
             <small>Panel del negocio</small>
           </span>
-        </Link>
+        </a>
         <div className="admin-user">
-          <span>{displayName}</span>
-          {process.env.NODE_ENV !== "development" && (
-            <a href="/api/admin-session?logout=1">Salir</a>
-          )}
+          <span>Administración</span>
+          <button type="button" onClick={onLogout}>Salir</button>
         </div>
       </header>
 
@@ -184,7 +133,7 @@ export default function AdminClient({ displayName }: { displayName: string }) {
           <p className="eyebrow">Control de hoy</p>
           <h1>Pedidos claros. Almacén al día.</h1>
         </div>
-        <Link href="/" className="button button--light">Ver tienda</Link>
+        <a href="#inicio" className="button button--light">Ver tienda</a>
       </section>
 
       <section className="metric-grid" aria-label="Resumen del negocio">
@@ -235,7 +184,7 @@ export default function AdminClient({ displayName }: { displayName: string }) {
                 <button disabled={busy === product.id} onClick={() => updateProduct(product, { stock: product.stock + product.minimumStep })} aria-label="Sumar existencia">+</button>
               </div>
               <label className="price-control"><span>Precio CUP</span><input type="number" min="0" step="1" defaultValue={product.priceCup} disabled={busy === product.id} onBlur={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value >= 0 && value !== product.priceCup) void updateProduct(product, { priceCup: value }); }} /></label>
-              <button className={`availability-toggle ${product.active ? "is-on" : ""}`} disabled={busy === product.id} onClick={() => updateProduct(product, { active: product.active ? 0 : 1 })}>{product.active ? "Visible" : "Oculto"}</button>
+              <button className={`availability-toggle ${product.active ? "is-on" : ""}`} disabled={busy === product.id} onClick={() => updateProduct(product, { active: !product.active })}>{product.active ? "Visible" : "Oculto"}</button>
             </article>
           ))}
           <p className="inventory-note">Cada pedido nuevo rebaja estas existencias. Si cancelas, las unidades regresan automáticamente.</p>

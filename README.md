@@ -2,41 +2,41 @@
 
 Catálogo móvil y panel de pedidos para un punto de elaboración de productos cárnicos.
 
-## Enlaces para compartir
+## Enlaces públicos
 
-- **Tienda para clientes:** https://tusalon.github.io/donpadron/
-- **APK para clientes:** https://github.com/tusalon/donpadron/releases/download/android-latest/Don-Padron.apk
-- **APK de administración:** https://github.com/tusalon/donpadron/releases/download/android-latest/Don-Padron-Admin.apk
-- **Panel del negocio:** https://don-padron.leetomy437.chatgpt.site/admin
+- Tienda para clientes: https://tusalon.github.io/donpadron/
+- Administración: https://tusalon.github.io/donpadron/#/admin
+- APK de clientes: https://github.com/tusalon/donpadron/releases/download/android-latest/Don-Padron.apk
+- APK de administración: https://github.com/tusalon/donpadron/releases/download/android-latest/Don-Padron-Admin.apk
 
-El enlace de la tienda se puede publicar en grupos de WhatsApp, Facebook, Telegram y otras redes. La APK abre la misma tienda y recibe inmediatamente los cambios de productos, precios y existencias.
+El enlace de la tienda es el que se puede publicar en grupos, estados y redes sociales. Los clientes no necesitan iniciar sesión.
 
-## Incluye
+## Arquitectura independiente
 
-- Catálogo público con disponibilidad real.
-- Carrito y pedido desde el teléfono.
-- Reserva automática de existencias al crear el pedido.
-- Confirmación por WhatsApp con resumen y total.
-- Panel del negocio para pedidos, inventario, precios y datos de pago.
-- Base de datos D1 y migraciones incluidas.
+- GitHub Pages publica la PWA.
+- Supabase guarda productos, existencias, pedidos y ajustes.
+- La administración usa una contraseña propia del negocio y una sesión temporal guardada en el dispositivo.
+- GitHub Actions compila la web y las dos APK.
 
-## Desarrollo
+La tienda y la administración funcionan con las cuentas propias de GitHub y Supabase.
+
+## Desarrollo local
 
 ```bash
 npm install
 npm run dev
 npm run build
+npm test
 ```
 
-El panel `/admin` usa una contraseña propia del negocio. En producción configura `ADMIN_PASSWORD` y una clave aleatoria larga en `ADMIN_SESSION_SECRET`.
+Crea `.env.local` a partir de `.env.example` y coloca la URL y la clave publicable de Supabase. Nunca uses una clave `service_role` en el navegador.
 
-## APK para Android
+## Base de datos
 
-El proyecto Android está en `android-app/`. La automatización `.github/workflows/android-apk.yml` compila dos APK firmadas en cada cambio de la rama `main`: una para clientes y otra que abre directamente la administración. Ambas se actualizan en la versión `android-latest` de GitHub Releases.
+Las migraciones de PostgreSQL están en `supabase/migrations`. Incluyen:
 
-La firma usa estos secretos del repositorio:
-
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+- catálogo público de solo lectura;
+- pedidos atómicos con descuento de existencias;
+- devolución de existencias al cancelar;
+- panel privado para pedidos, inventario y datos de pago;
+- Row Level Security en todas las tablas públicas.

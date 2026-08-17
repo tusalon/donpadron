@@ -28,7 +28,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String STORE_HOST = "don-padron.leetomy437.chatgpt.site";
+    private static final String STORE_HOST = "tusalon.github.io";
 
     private WebView webView;
     private View loadingView;
