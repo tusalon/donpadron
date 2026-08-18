@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application>
         <activity
             android:name=".MainActivity"
@@ -40,5 +42,17 @@
                     android:pathPrefix="/donpadron" />
             </intent-filter>
         </activity>
+
+        <!-- Chrome delega aqui las notificaciones del sitio para que las
+             muestre la app instalada en vez del navegador. -->
+        <service
+            android:name="com.meta.androidbrowserhelper.trusted.DelegationService"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
