@@ -55,6 +55,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [pushState, setPushState] = useState<"checking" | "unsupported" | "denied" | "off" | "on" | "busy">("checking");
+  const [pushStep, setPushStep] = useState("");
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -82,26 +83,39 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   async function enablePushNotifications() {
     setPushState("busy");
     setError("");
+    setPushStep("Pidiendo permiso");
     try {
-      const permission = await Notification.requestPermission();
+      const permission = await withTimeout(Notification.requestPermission(), 60000, "Pidiendo permiso");
       if (permission !== "granted") {
         setPushState(permission === "denied" ? "denied" : "off");
         return;
       }
       const vapidKey = import.meta.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidKey) throw new Error("Falta configurar la clave pública de notificaciones.");
-      const registration = await navigator.serviceWorker.ready;
+
+      setPushStep("Preparando el servicio");
+      const registration = await withTimeout(navigator.serviceWorker.ready, 20000, "Preparando el servicio");
+
+      setPushStep("Creando la suscripción");
       const subscription =
         (await registration.pushManager.getSubscription()) ??
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey),
-        }));
+        (await withTimeout(
+          registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidKey),
+          }),
+          30000,
+          "Creando la suscripción",
+        ));
+
+      setPushStep("Guardando en el servidor");
       await saveAdminPushSubscription(token, subscription.toJSON());
       setPushState("on");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No pudimos activar las notificaciones.");
       setPushState("off");
+    } finally {
+      setPushStep("");
     }
   }
 
@@ -407,7 +421,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
                 disabled={pushState === "busy" || pushState === "on" || pushState === "checking"}
                 onClick={enablePushNotifications}
               >
-                {pushState === "on" ? "Notificaciones activadas" : pushState === "busy" ? "Activando…" : "Activar notificaciones"}
+                {pushState === "on" ? "Notificaciones activadas" : pushState === "busy" ? `${pushStep || "Activando"}…` : "Activar notificaciones"}
               </button>
             )}
           </div>
@@ -427,6 +441,15 @@ function formatQuantity(value: number) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("es-CU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, step: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Se quedó en "${step}" y no respondió. Revisa los permisos de notificación del navegador y vuelve a intentarlo.`)), ms),
+    ),
+  ]);
 }
 
 function urlBase64ToUint8Array(base64String: string) {
