@@ -43,6 +43,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Chrome lanza esta actividad para pedir el permiso de
+             notificaciones en Android 13+. La libreria no la declara: si
+             falta, Notification.requestPermission() nunca responde. -->
+        <activity
+            android:name="com.meta.androidbrowserhelper.trusted.NotificationPermissionRequestActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
+
         <!-- Chrome delega aqui las notificaciones del sitio para que las
              muestre la app instalada en vez del navegador. -->
         <service
