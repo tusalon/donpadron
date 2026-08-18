@@ -68,9 +68,16 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
     }
     navigator.serviceWorker.ready
       .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => setPushState(subscription ? "on" : "off"))
+      .then(async (subscription) => {
+        if (!subscription) return "off" as const;
+        // El navegador puede tener la suscripcion aunque el guardado anterior
+        // fallara. El upsert es idempotente, asi que la reafirmamos siempre.
+        await saveAdminPushSubscription(token, subscription.toJSON());
+        return "on" as const;
+      })
+      .then(setPushState)
       .catch(() => setPushState("off"));
-  }, []);
+  }, [token]);
 
   async function enablePushNotifications() {
     setPushState("busy");
