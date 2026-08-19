@@ -44,6 +44,7 @@ type AdminClientProps = {
 
 export default function AdminClient({ token, onLogout, onSessionExpired }: AdminClientProps) {
   const logoUrl = `${import.meta.env.BASE_URL}don-padron-icon.png`;
+  const storeUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [settings, setSettings] = useState<StoreSettings>({ businessName: "Don Padrón", whatsappPhone: "", pickupAddress: "", paymentCopy: "" });
@@ -56,6 +57,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [error, setError] = useState("");
   const [pushState, setPushState] = useState<"checking" | "unsupported" | "denied" | "off" | "on" | "busy">("checking");
   const [pushStep, setPushStep] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -79,6 +81,29 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
       .then(setPushState)
       .catch(() => setPushState("off"));
   }, [token]);
+
+  async function copyStoreLink() {
+    try {
+      await navigator.clipboard.writeText(storeUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setError("No pudimos copiar. Mantén pulsado el enlace para copiarlo a mano.");
+    }
+  }
+
+  async function shareStoreLink() {
+    const message = `${settings.businessName}: mira lo que hay hoy y deja tu pedido aquí 👉 ${storeUrl}`;
+    if (!navigator.share) {
+      await copyStoreLink();
+      return;
+    }
+    try {
+      await navigator.share({ title: settings.businessName, text: message, url: storeUrl });
+    } catch {
+      // El usuario cerró el menú de compartir: no hay nada que reportar.
+    }
+  }
 
   async function enablePushNotifications() {
     setPushState("busy");
@@ -424,6 +449,15 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
                 {pushState === "on" ? "Notificaciones activadas" : pushState === "busy" ? `${pushStep || "Activando"}…` : "Activar notificaciones"}
               </button>
             )}
+          </div>
+
+          <div className="settings-panel">
+            <div className="settings-panel__intro"><p className="eyebrow">Para pasar a los clientes</p><h2>Enlace de la tienda</h2><p>Compártelo por WhatsApp, en estados o en redes. Quien lo abra puede pedir sin instalar nada.</p></div>
+            <p className="store-link">{storeUrl}</p>
+            <div className="store-link__actions">
+              <button className="button button--primary" type="button" onClick={shareStoreLink}>Compartir enlace</button>
+              <button className="button button--light" type="button" onClick={copyStoreLink}>{linkCopied ? "¡Copiado!" : "Copiar enlace"}</button>
+            </div>
           </div>
         </>
       )}
