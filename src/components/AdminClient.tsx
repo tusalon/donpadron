@@ -3,6 +3,7 @@ import {
   getAdminDashboard,
   saveAdminProduct,
   saveAdminPushSubscription,
+  sendTestPushNotification,
   updateAdminOrder,
   updateAdminProduct,
   updateAdminSettings,
@@ -58,6 +59,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [pushState, setPushState] = useState<"checking" | "unsupported" | "denied" | "off" | "on" | "busy">("checking");
   const [pushStep, setPushStep] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [pushTest, setPushTest] = useState("");
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -81,6 +83,21 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
       .then(setPushState)
       .catch(() => setPushState("off"));
   }, [token]);
+
+  async function testPushNotification() {
+    setPushTest("Enviando…");
+    setError("");
+    try {
+      const result = await sendTestPushNotification();
+      setPushTest(
+        result.sent > 0
+          ? `Enviada a ${result.sent} dispositivo${result.sent === 1 ? "" : "s"}.`
+          : `No se envió a nadie. ${result.errors.join(" ") || "No hay dispositivos suscritos."}`,
+      );
+    } catch (caught) {
+      setPushTest(caught instanceof Error ? caught.message : "No pudimos enviar la prueba.");
+    }
+  }
 
   async function copyStoreLink() {
     try {
@@ -448,6 +465,12 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
               >
                 {pushState === "on" ? "Notificaciones activadas" : pushState === "busy" ? `${pushStep || "Activando"}…` : "Activar notificaciones"}
               </button>
+            )}
+            {pushState === "on" && (
+              <>
+                <button className="text-button push-test-button" type="button" onClick={testPushNotification}>Enviar notificación de prueba</button>
+                {pushTest && <p className="inventory-note">{pushTest}</p>}
+              </>
             )}
           </div>
 

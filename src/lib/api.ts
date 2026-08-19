@@ -88,12 +88,43 @@ export async function placeOrder(payload: OrderPayload): Promise<CreatedOrder> {
   return order;
 }
 
-function notifyNewOrder(displayId: string, totalCup: number) {
-  return supabase.functions
-    .invoke("notify-new-order", { body: { displayId, totalCup } })
-    .catch(() => {
-      // El pedido ya se creó; si la notificación falla no afecta al cliente.
+// El pedido ya se creó: un fallo aquí no debe romper la compra del cliente,
+// pero sí queda registrado para poder diagnosticarlo.
+async function notifyNewOrder(displayId: string, totalCup: number) {
+  try {
+    const { data, error } = await supabase.functions.invoke("notify-new-order", {
+      body: { displayId, totalCup },
     });
+    if (error) console.error("Aviso de pedido nuevo falló:", error.message);
+    else if (data?.failed) console.error("Aviso de pedido nuevo con errores:", data.errors);
+  } catch (caught) {
+    console.error("Aviso de pedido nuevo falló:", caught);
+  }
+}
+
+export type PushTestResult = { sent: number; failed: number; errors: string[] };
+
+export async function sendTestPushNotification(): Promise<PushTestResult> {
+  const { data, error } = await supabase.functions.invoke("notify-new-order", {
+    body: { test: true },
+  });
+  if (error) throw new Error(await readFunctionError(error, "No pudimos enviar la prueba."));
+  return data as PushTestResult;
+}
+
+// Los errores de una funcion edge traen el detalle util dentro del cuerpo de la
+// respuesta, no en el mensaje, que siempre dice lo mismo.
+async function readFunctionError(error: unknown, fallback: string) {
+  const response = (error as { context?: Response })?.context;
+  if (response instanceof Response) {
+    try {
+      const body = await response.json();
+      if (body?.error) return String(body.error);
+    } catch {
+      // Respuesta sin JSON: nos quedamos con el mensaje original.
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
 }
 
 export async function uploadProductPhoto(file: File): Promise<string> {

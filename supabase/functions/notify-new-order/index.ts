@@ -18,66 +18,85 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
 );
 
+type Subscription = {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   if (!vapidPublicKey || !vapidPrivateKey) {
-    return new Response(JSON.stringify({ error: "Notificaciones no configuradas." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "Faltan las claves VAPID en los secretos de la funcion." }, 500);
   }
 
   let displayId = "";
   let totalCup = 0;
+  let isTest = false;
   try {
     const body = await req.json();
     displayId = String(body.displayId ?? "").slice(0, 40);
     totalCup = Number(body.totalCup) || 0;
+    isTest = body.test === true;
   } catch {
     // Cuerpo vacío o inválido: se envía la notificación genérica igual.
   }
 
-  const { data: subscriptions, error } = await supabase
-    .schema("private")
-    .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth");
-
+  const { data, error } = await supabase.rpc("push_list_subscriptions");
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: `No pudimos leer las suscripciones: ${error.message}` }, 500);
   }
 
-  const payload = JSON.stringify({
-    title: "Nuevo pedido en Don Padrón",
-    body: displayId ? `Pedido ${displayId} · ${totalCup} CUP` : "Entró un pedido nuevo. Revisa el panel.",
-  });
+  const subscriptions = (data ?? []) as Subscription[];
+  if (subscriptions.length === 0) {
+    return json({ sent: 0, failed: 0, errors: ["No hay dispositivos suscritos."] });
+  }
+
+  const payload = JSON.stringify(
+    isTest
+      ? { title: "Prueba de Don Padrón", body: "Si ves esto, las notificaciones funcionan." }
+      : {
+          title: "Nuevo pedido en Don Padrón",
+          body: displayId ? `Pedido ${displayId} · ${totalCup} CUP` : "Entró un pedido nuevo. Revisa el panel.",
+        },
+  );
 
   const staleIds: string[] = [];
+  const errors: string[] = [];
+  let sent = 0;
 
   await Promise.all(
-    (subscriptions ?? []).map(async (sub) => {
+    subscriptions.map(async (sub) => {
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload,
         );
+        sent += 1;
       } catch (caught) {
         const statusCode = (caught as { statusCode?: number })?.statusCode;
+        const detail = (caught as { body?: string })?.body ?? (caught as Error)?.message ?? String(caught);
+        // 404/410: el navegador desecho la suscripcion, se limpia sola.
         if (statusCode === 404 || statusCode === 410) staleIds.push(sub.id);
+        errors.push(statusCode ? `${statusCode}: ${detail}` : detail);
       }
     }),
   );
 
   if (staleIds.length > 0) {
-    await supabase.schema("private").from("push_subscriptions").delete().in("id", staleIds);
+    await supabase.rpc("push_delete_subscriptions", { p_ids: staleIds });
   }
 
-  return new Response(JSON.stringify({ sent: (subscriptions ?? []).length - staleIds.length }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return json({ sent, failed: errors.length, errors });
 });
