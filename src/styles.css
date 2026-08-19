@@ -351,6 +351,12 @@ a { color: inherit; text-decoration: none; }
 .product-editor__fields input[type="color"] { padding: 3px; cursor: pointer; }
 .product-editor__fields textarea { min-height: 86px; resize: vertical; }
 .product-editor__fields input:focus, .product-editor__fields textarea:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(227, 30, 36, 0.1); }
+.product-editor__fields select { width: 100%; min-height: 42px; border: 1px solid var(--border); border-radius: 10px; padding: 0 11px; background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700; }
+.draft-products { display: grid; gap: 9px; max-height: 320px; overflow-y: auto; }
+.draft-product { padding: 11px 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--paper); display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.draft-product.is-chosen { border-color: var(--red); background: #fff6f5; }
+.draft-product strong { display: block; font-size: 12px; }
+.draft-product small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
 .product-editor__wide { grid-column: span 2; }
 .product-editor__photo input[type="file"] { padding: 8px; font-size: 11px; }
 .product-editor__photo-preview { width: 84px; height: 84px; border-radius: 12px; object-fit: cover; margin-bottom: 8px; }

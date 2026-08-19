@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  createAdminOrder,
   getAdminDashboard,
   getCustomerDetail,
   saveAdminProduct,
@@ -31,6 +32,28 @@ const customerStatusLabels: Record<string, string> = {
   pendiente: "Por aceptar",
   aceptado: "Cliente",
   rechazado: "Rechazado",
+};
+
+type OrderDraft = {
+  customerName: string;
+  phone: string;
+  deliveryMethod: "recoger" | "domicilio";
+  address: string;
+  paymentMethod: "Transfermóvil" | "Efectivo";
+  notes: string;
+  status: string;
+  items: Record<string, number>;
+};
+
+const emptyOrder: OrderDraft = {
+  customerName: "",
+  phone: "",
+  deliveryMethod: "recoger",
+  address: "",
+  paymentMethod: "Efectivo",
+  notes: "",
+  status: "confirmado",
+  items: {},
 };
 
 const emptyProduct: AdminProduct = {
@@ -75,6 +98,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [linkCopied, setLinkCopied] = useState(false);
   const [pushTest, setPushTest] = useState("");
   const [notifyOrder, setNotifyOrder] = useState<{ id: string; status: string } | null>(null);
+  const [orderDraft, setOrderDraft] = useState<OrderDraft | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -319,6 +343,49 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
     }
   }
 
+  function updateOrderDraft(changes: Partial<OrderDraft>) {
+    setOrderDraft((current) => (current ? { ...current, ...changes } : current));
+  }
+
+  function changeDraftQuantity(product: AdminProduct, delta: number) {
+    setOrderDraft((current) => {
+      if (!current) return current;
+      const next = Math.max(0, (current.items[product.id] ?? 0) + delta);
+      const items = { ...current.items };
+      if (next <= 0) delete items[product.id];
+      else items[product.id] = Number(next.toFixed(3));
+      return { ...current, items };
+    });
+  }
+
+  const draftTotal = orderDraft
+    ? products.reduce((sum, product) => sum + product.priceCup * (orderDraft.items[product.id] ?? 0), 0)
+    : 0;
+
+  async function saveOrderDraft(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!orderDraft) return;
+
+    const items = Object.entries(orderDraft.items).map(([productId, quantity]) => ({ productId, quantity }));
+    if (items.length === 0) {
+      setError("Añade al menos un producto al pedido.");
+      return;
+    }
+
+    setBusy("order-editor");
+    try {
+      const created = await createAdminOrder(token, { ...orderDraft, items });
+      setOrderDraft(null);
+      setError("");
+      await load();
+      setNotifyOrder({ id: created.order.id, status: orderDraft.status });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No pudimos crear el pedido.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function updateOrder(order: AdminOrder, status: string) {
     const question = status === "cancelado"
       ? `¿Cancelar el pedido ${order.displayId} de ${order.customerName}? Las existencias volverán al inventario.`
@@ -414,6 +481,67 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
         <div className="admin-loading">Organizando la información…</div>
       ) : tab === "orders" ? (
         <section className="order-list" aria-label="Pedidos recientes">
+          <div className="inventory-toolbar">
+            <div>
+              <p className="eyebrow">Movimiento del día</p>
+              <h2>Pedidos</h2>
+            </div>
+            <button className="button button--primary" type="button" disabled={busy === "order-editor"} onClick={() => { setError(""); setOrderDraft(emptyOrder); }}>+ Nuevo pedido</button>
+          </div>
+
+          {orderDraft && (
+            <form className="product-editor" onSubmit={saveOrderDraft}>
+              <div className="product-editor__head">
+                <div>
+                  <p className="eyebrow">Alta manual</p>
+                  <h3>Nuevo pedido</h3>
+                </div>
+                <button type="button" onClick={() => setOrderDraft(null)}>Cerrar</button>
+              </div>
+
+              <div className="product-editor__fields">
+                <label><span>Cliente</span><input required list="customer-names" value={orderDraft.customerName} onChange={(event) => {
+                  const name = event.target.value;
+                  const known = customers.find((customer) => customer.name === name);
+                  updateOrderDraft(known ? { customerName: name, phone: known.phone } : { customerName: name });
+                }} placeholder="Nombre y apellidos" /></label>
+                <label><span>Teléfono</span><input required value={orderDraft.phone} onChange={(event) => updateOrderDraft({ phone: event.target.value })} inputMode="tel" placeholder="Ej. 5351234567" /></label>
+                <label><span>Entrega</span><select value={orderDraft.deliveryMethod} onChange={(event) => updateOrderDraft({ deliveryMethod: event.target.value as OrderDraft["deliveryMethod"] })}><option value="recoger">Recoge en el punto</option><option value="domicilio">A domicilio</option></select></label>
+                <label><span>Pago</span><select value={orderDraft.paymentMethod} onChange={(event) => updateOrderDraft({ paymentMethod: event.target.value as OrderDraft["paymentMethod"] })}><option value="Efectivo">Efectivo</option><option value="Transfermóvil">Transfermóvil</option></select></label>
+                {orderDraft.deliveryMethod === "domicilio" && (
+                  <label className="product-editor__wide"><span>Dirección</span><input required value={orderDraft.address} onChange={(event) => updateOrderDraft({ address: event.target.value })} placeholder="Calle, número y municipio" /></label>
+                )}
+                <label><span>Estado inicial</span><select value={orderDraft.status} onChange={(event) => updateOrderDraft({ status: event.target.value })}>{["pendiente", "confirmado", "pagado", "listo", "completado"].map((status) => <option value={status} key={status}>{statusLabels[status]}</option>)}</select></label>
+                <label className="product-editor__wide"><span>Nota</span><input value={orderDraft.notes} onChange={(event) => updateOrderDraft({ notes: event.target.value })} placeholder="Opcional" maxLength={300} /></label>
+              </div>
+              <datalist id="customer-names">
+                {customers.map((customer) => <option value={customer.name} key={customer.id} />)}
+              </datalist>
+
+              <p className="eyebrow customer-section-title">Productos</p>
+              <div className="draft-products">
+                {products.map((product) => (
+                  <div className={`draft-product ${orderDraft.items[product.id] ? "is-chosen" : ""}`} key={product.id}>
+                    <div>
+                      <strong>{product.emoji} {product.name}</strong>
+                      <small>{formatCup(product.priceCup)} · quedan {formatQuantity(product.stock)}{product.active ? "" : " · oculto"}</small>
+                    </div>
+                    <div className="quantity-control">
+                      <button type="button" disabled={!orderDraft.items[product.id]} onClick={() => changeDraftQuantity(product, -product.minimumStep)} aria-label={`Quitar ${product.name}`}>−</button>
+                      <strong>{formatQuantity(orderDraft.items[product.id] ?? 0)}</strong>
+                      <button type="button" disabled={(orderDraft.items[product.id] ?? 0) + product.minimumStep > product.stock} onClick={() => changeDraftQuantity(product, product.minimumStep)} aria-label={`Añadir ${product.name}`}>+</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="product-editor__actions">
+                <button className="button button--primary" type="submit" disabled={busy === "order-editor"}>{busy === "order-editor" ? "Creando…" : `Crear pedido · ${formatCup(draftTotal)}`}</button>
+                <button className="text-button" type="button" onClick={() => setOrderDraft(null)}>Cancelar</button>
+              </div>
+            </form>
+          )}
+
           {orders.length === 0 ? (
             <div className="empty-panel"><strong>Todavía no hay pedidos.</strong><span>Cuando un cliente compre, aparecerá aquí.</span></div>
           ) : orders.map((order) => (

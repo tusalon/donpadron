@@ -244,6 +244,17 @@ export async function saveAdminProduct(
   return data as AdminProduct;
 }
 
+export type AdminOrderPayload = OrderPayload & { status: string };
+
+export async function createAdminOrder(token: string, payload: AdminOrderPayload): Promise<CreatedOrder> {
+  const { data, error } = await supabase.rpc("admin_create_order", {
+    p_token: token,
+    p_payload: payload,
+  });
+  if (error) throw new Error(readableError(error.message, "No pudimos crear el pedido."));
+  return data as CreatedOrder;
+}
+
 export async function setCustomerStatus(token: string, customerId: string, status: CustomerStatus) {
   const { error } = await supabase.rpc("admin_set_customer_status", {
     p_token: token,
