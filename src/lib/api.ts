@@ -28,6 +28,7 @@ export type AdminProduct = Product & {
 export type AdminOrder = {
   id: string;
   displayId: string;
+  customerId: string | null;
   customerName: string;
   phone: string;
   deliveryMethod: string;
@@ -48,8 +49,27 @@ export type AdminOrder = {
   }>;
 };
 
+export type CustomerStatus = "pendiente" | "aceptado" | "rechazado";
+
+export type Customer = {
+  id: string;
+  name: string;
+  phone: string;
+  status: CustomerStatus;
+  createdAt: string;
+  orderCount: number;
+  totalSpentCup: number;
+  lastOrderAt: string | null;
+};
+
+export type CustomerDetail = {
+  topProducts: Array<{ productName: string; quantity: number; totalCup: number }>;
+  orders: Array<{ id: string; displayId: string; totalCup: number; status: string; createdAt: string }>;
+};
+
 export type AdminDashboard = {
   products: AdminProduct[];
+  customers: Customer[];
   orders: AdminOrder[];
   settings: StoreSettings;
 };
@@ -159,6 +179,26 @@ export async function saveAdminPushSubscription(token: string, subscription: Pus
   if (error) throw new Error(readableError(error.message, "No pudimos activar las notificaciones."));
 }
 
+export type TrackedOrder = {
+  displayId: string;
+  customerName: string;
+  status: string;
+  totalCup: number;
+  deliveryMethod: string;
+  address: string;
+  paymentMethod: string;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{ id: number; productName: string; quantity: number; unit: string; subtotalCup: number }>;
+  business: { name: string; whatsappPhone: string; pickupAddress: string };
+};
+
+export async function getOrderStatus(orderId: string): Promise<TrackedOrder> {
+  const { data, error } = await supabase.rpc("get_order_status", { p_order_id: orderId });
+  if (error) throw new Error(readableError(error.message, "No pudimos encontrar ese pedido."));
+  return data as TrackedOrder;
+}
+
 export async function adminLogin(password: string): Promise<string> {
   const { data, error } = await supabase.rpc("admin_login", { p_password: password });
   if (error) throw new Error("No pudimos comprobar la contraseña. Intenta nuevamente.");
@@ -204,6 +244,24 @@ export async function saveAdminProduct(
   return data as AdminProduct;
 }
 
+export async function setCustomerStatus(token: string, customerId: string, status: CustomerStatus) {
+  const { error } = await supabase.rpc("admin_set_customer_status", {
+    p_token: token,
+    p_customer_id: customerId,
+    p_status: status,
+  });
+  if (error) throw new Error(readableError(error.message, "No pudimos actualizar el cliente."));
+}
+
+export async function getCustomerDetail(token: string, customerId: string): Promise<CustomerDetail> {
+  const { data, error } = await supabase.rpc("admin_customer_detail", {
+    p_token: token,
+    p_customer_id: customerId,
+  });
+  if (error) throw new Error(readableError(error.message, "No pudimos cargar la ficha del cliente."));
+  return data as CustomerDetail;
+}
+
 export async function updateAdminOrder(token: string, orderId: string, status: string) {
   const { error } = await supabase.rpc("admin_update_order", {
     p_token: token,
@@ -242,6 +300,8 @@ function readableError(message: string, fallback: string) {
     "Completa nombre",
     "Ya existe",
     "La suscripción",
+    "Cliente no encontrado",
+    "Estado de cliente",
     "Pedido no encontrado",
     "Un pedido cancelado",
     "Estado de pedido",

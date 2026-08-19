@@ -16,7 +16,12 @@ type CompletedOrder = {
   displayId: string;
   totalCup: number;
   whatsappUrl: string;
+  trackUrl: string;
 };
+
+function trackUrlFor(orderId: string) {
+  return `${window.location.origin}${import.meta.env.BASE_URL}#/pedido/${orderId}`;
+}
 
 const defaultCheckout: Checkout = {
   customerName: "",
@@ -120,8 +125,9 @@ export default function Storefront() {
         ...checkout,
         items: cartItems.map((item) => ({ productId: item.id, quantity: item.quantity })),
       });
-      const whatsappUrl = createWhatsappUrl(data, checkout, cartItems);
-      setCompletedOrder({ ...data.order, whatsappUrl });
+      const trackUrl = trackUrlFor(data.order.id);
+      const whatsappUrl = createWhatsappUrl(data, checkout, cartItems, trackUrl);
+      setCompletedOrder({ ...data.order, whatsappUrl, trackUrl });
       setCart({});
       await loadCatalog();
     } catch (caught) {
@@ -297,7 +303,7 @@ export default function Storefront() {
       <aside className={`checkout-sheet ${checkoutOpen ? "is-open" : ""}`} aria-hidden={!checkoutOpen}>
         <div className="sheet-header"><div><p className="eyebrow">Último paso</p><h2>{completedOrder ? "Pedido creado" : "Tus datos"}</h2></div><button onClick={() => setCheckoutOpen(false)} aria-label="Cerrar">×</button></div>
         {completedOrder ? (
-          <div className="order-success"><div className="success-mark">✓</div><p className="eyebrow">Listo para confirmar</p><h3>{completedOrder.displayId}</h3><p>Ya reservamos la existencia. Envía el resumen por WhatsApp para coordinar pago y entrega.</p><div className="success-total"><span>Total</span><strong>{formatCup(completedOrder.totalCup)}</strong></div><a className="button button--whatsapp button--full" href={completedOrder.whatsappUrl} target="_blank" rel="noreferrer">Confirmar por WhatsApp <span>W</span></a><button className="text-button" onClick={finishOrder}>Volver a la tienda</button></div>
+          <div className="order-success"><div className="success-mark">✓</div><p className="eyebrow">Listo para confirmar</p><h3>{completedOrder.displayId}</h3><p>Ya reservamos la existencia. Envía el resumen por WhatsApp para coordinar pago y entrega.</p><div className="success-total"><span>Total</span><strong>{formatCup(completedOrder.totalCup)}</strong></div><a className="button button--whatsapp button--full" href={completedOrder.whatsappUrl} target="_blank" rel="noreferrer">Confirmar por WhatsApp <span>W</span></a><a className="button button--light button--full track-link" href={completedOrder.trackUrl}>Ver el estado de mi pedido</a><p className="form-note">Guarda este enlace para seguir tu pedido en cualquier momento.</p><button className="text-button" onClick={finishOrder}>Volver a la tienda</button></div>
         ) : (
           <form className="checkout-form" onSubmit={submitOrder}>
             <div className="checkout-total"><span>{formatQuantity(cartCount)} productos</span><strong>{formatCup(cartTotal)}</strong></div>
@@ -330,6 +336,7 @@ function createWhatsappUrl(
   result: Awaited<ReturnType<typeof placeOrder>>,
   checkout: Checkout,
   items: Array<Product & { quantity: number }>,
+  trackUrl: string,
 ) {
   const message = [
     `Hola, quiero confirmar mi pedido ${result.order.displayId}.`,
@@ -345,6 +352,8 @@ function createWhatsappUrl(
     `Pago: ${checkout.paymentMethod}`,
     result.settings.paymentCopy ? `Indicaciones de pago: ${result.settings.paymentCopy}` : "",
     checkout.notes ? `Nota: ${checkout.notes}` : "",
+    "",
+    `Sigue tu pedido aquí: ${trackUrl}`,
   ].filter(Boolean).join("\n");
   const phone = result.settings.whatsappPhone.replace(/\D/g, "");
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;

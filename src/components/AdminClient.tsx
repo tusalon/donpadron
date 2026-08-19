@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getAdminDashboard,
+  getCustomerDetail,
   saveAdminProduct,
   saveAdminPushSubscription,
   sendTestPushNotification,
+  setCustomerStatus,
   updateAdminOrder,
   updateAdminProduct,
   updateAdminSettings,
   uploadProductPhoto,
   type AdminOrder,
   type AdminProduct,
+  type Customer,
+  type CustomerDetail,
+  type CustomerStatus,
   type StoreSettings,
 } from "../lib/api";
 
@@ -20,6 +25,12 @@ const statusLabels: Record<string, string> = {
   listo: "Listo para entregar",
   completado: "Completado",
   cancelado: "Cancelado",
+};
+
+const customerStatusLabels: Record<string, string> = {
+  pendiente: "Por aceptar",
+  aceptado: "Cliente",
+  rechazado: "Rechazado",
 };
 
 const emptyProduct: AdminProduct = {
@@ -48,8 +59,11 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const storeUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [settings, setSettings] = useState<StoreSettings>({ businessName: "Don Padrón", whatsappPhone: "", pickupAddress: "", paymentCopy: "" });
-  const [tab, setTab] = useState<"orders" | "inventory" | "settings">("orders");
+  const [tab, setTab] = useState<"orders" | "inventory" | "customers" | "settings">("orders");
+  const [openCustomer, setOpenCustomer] = useState<Customer | null>(null);
+  const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [productDraft, setProductDraft] = useState<AdminProduct | null>(null);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -60,6 +74,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   const [pushStep, setPushStep] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [pushTest, setPushTest] = useState("");
+  const [notifyOrder, setNotifyOrder] = useState<{ id: string; status: string } | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -166,6 +181,7 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
       const data = await getAdminDashboard(token);
       setProducts(data.products ?? []);
       setOrders(data.orders ?? []);
+      setCustomers(data.customers ?? []);
       if (data.settings) setSettings(data.settings);
       setError("");
     } catch (caught) {
@@ -194,6 +210,32 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
       lowStock: products.filter((product) => product.active && product.stock <= 5).length,
     };
   }, [orders, products]);
+
+  const pendingCustomers = customers.filter((customer) => customer.status === "pendiente").length;
+
+  async function changeCustomerStatus(customer: Customer, status: CustomerStatus) {
+    setBusy(customer.id);
+    try {
+      await setCustomerStatus(token, customer.id, status);
+      setCustomers((current) => current.map((item) => (item.id === customer.id ? { ...item, status } : item)));
+      setOpenCustomer((current) => (current?.id === customer.id ? { ...current, status } : current));
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No pudimos actualizar el cliente.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function showCustomer(customer: Customer) {
+    setOpenCustomer(customer);
+    setCustomerDetail(null);
+    try {
+      setCustomerDetail(await getCustomerDetail(token, customer.id));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No pudimos cargar la ficha del cliente.");
+    }
+  }
 
   async function updateProduct(product: AdminProduct, changes: Partial<AdminProduct>) {
     const next = { ...product, ...changes };
@@ -278,15 +320,40 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
   }
 
   async function updateOrder(order: AdminOrder, status: string) {
+    const question = status === "cancelado"
+      ? `¿Cancelar el pedido ${order.displayId} de ${order.customerName}? Las existencias volverán al inventario.`
+      : `¿Marcar el pedido ${order.displayId} de ${order.customerName} como "${statusLabels[status]}"?`;
+    if (!window.confirm(question)) return;
+
     setBusy(order.id);
     try {
       await updateAdminOrder(token, order.id, status);
+      setNotifyOrder({ id: order.id, status });
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No pudimos actualizar el pedido.");
     } finally {
       setBusy("");
     }
+  }
+
+  // El aviso se manda con un toque explicito: abrir WhatsApp despues de un
+  // await lo bloquean los navegadores y el mensaje se perderia en silencio.
+  function customerWhatsappUrl(order: AdminOrder, status: string) {
+    const trackUrl = `${storeUrl}#/pedido/${order.id}`;
+    const pickup = settings.pickupAddress || "el punto de elaboración";
+    const messages: Record<string, string> = {
+      pendiente: `Hola ${order.customerName}, recibimos tu pedido ${order.displayId}.`,
+      confirmado: `Hola ${order.customerName}, confirmamos tu pedido ${order.displayId}. Ya lo estamos preparando.`,
+      pagado: `Hola ${order.customerName}, recibimos el pago de tu pedido ${order.displayId}. ¡Gracias!`,
+      listo: order.deliveryMethod === "domicilio"
+        ? `Hola ${order.customerName}, tu pedido ${order.displayId} está listo y sale para tu dirección.`
+        : `Hola ${order.customerName}, tu pedido ${order.displayId} está listo. Puedes recogerlo en ${pickup}.`,
+      completado: `Hola ${order.customerName}, gracias por tu compra. Esperamos verte pronto por ${settings.businessName}.`,
+      cancelado: `Hola ${order.customerName}, tu pedido ${order.displayId} fue cancelado. Escríbenos si necesitas ayuda.`,
+    };
+    const text = `${messages[status] ?? messages.pendiente}\n\nSigue tu pedido aquí: ${trackUrl}`;
+    return `https://wa.me/${order.phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
   }
 
   async function saveSettings(event: React.FormEvent<HTMLFormElement>) {
@@ -336,6 +403,9 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
       <nav className="admin-tabs" aria-label="Secciones del panel">
         <button className={tab === "orders" ? "is-active" : ""} onClick={() => setTab("orders")}>Pedidos</button>
         <button className={tab === "inventory" ? "is-active" : ""} onClick={() => setTab("inventory")}>Inventario</button>
+        <button className={tab === "customers" ? "is-active" : ""} onClick={() => setTab("customers")}>
+          Clientes{pendingCustomers > 0 && <b className="tab-badge">{pendingCustomers}</b>}
+        </button>
         <button className={tab === "settings" ? "is-active" : ""} onClick={() => setTab("settings")}>Ajustes</button>
       </nav>
 
@@ -361,6 +431,17 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
                 {order.status === "listo" && <button disabled={busy === order.id} onClick={() => updateOrder(order, "completado")}>Entregado</button>}
                 {!['cancelado', 'completado'].includes(order.status) && <button className="button-link-danger" disabled={busy === order.id} onClick={() => updateOrder(order, "cancelado")}>Cancelar y devolver stock</button>}
               </div>
+              {notifyOrder?.id === order.id && (
+                <a
+                  className="notify-customer"
+                  href={customerWhatsappUrl(order, notifyOrder.status)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setNotifyOrder(null)}
+                >
+                  Avisar a {order.customerName} por WhatsApp <span>W</span>
+                </a>
+              )}
             </article>
           ))}
         </section>
@@ -436,6 +517,87 @@ export default function AdminClient({ token, onLogout, onSessionExpired }: Admin
             );
           })}
           <p className="inventory-note">Cada pedido nuevo rebaja estas existencias. Si cancelas, las unidades regresan automáticamente.</p>
+        </section>
+      ) : tab === "customers" ? (
+        <section className="inventory-list" aria-label="Clientes">
+          <div className="inventory-toolbar">
+            <div>
+              <p className="eyebrow">Cartera del negocio</p>
+              <h2>Clientes</h2>
+            </div>
+            <span className="customer-count">{customers.length} en total</span>
+          </div>
+
+          {openCustomer && (
+            <div className="product-editor">
+              <div className="product-editor__head">
+                <div>
+                  <p className="eyebrow">{openCustomer.phone}</p>
+                  <h3>{openCustomer.name}</h3>
+                </div>
+                <button type="button" onClick={() => setOpenCustomer(null)}>Cerrar</button>
+              </div>
+              <div className="customer-stats">
+                <article><span>Pedidos</span><strong>{openCustomer.orderCount}</strong></article>
+                <article><span>Total gastado</span><strong>{formatCup(openCustomer.totalSpentCup)}</strong></article>
+                <article><span>Último pedido</span><strong>{openCustomer.lastOrderAt ? formatDate(openCustomer.lastOrderAt) : "Nunca"}</strong></article>
+              </div>
+              {!customerDetail ? (
+                <p className="inventory-note">Cargando la ficha…</p>
+              ) : (
+                <>
+                  <p className="eyebrow customer-section-title">Lo que más compra</p>
+                  {customerDetail.topProducts.length === 0 ? (
+                    <p className="inventory-note">Todavía no tiene compras registradas.</p>
+                  ) : (
+                    <ul className="customer-top-list">
+                      {customerDetail.topProducts.map((item) => (
+                        <li key={item.productName}>
+                          <span>{item.productName}</span>
+                          <b>{formatQuantity(item.quantity)} · {formatCup(item.totalCup)}</b>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <p className="eyebrow customer-section-title">Sus pedidos</p>
+                  {customerDetail.orders.length === 0 ? (
+                    <p className="inventory-note">Sin pedidos.</p>
+                  ) : (
+                    <ul className="customer-top-list">
+                      {customerDetail.orders.map((order) => (
+                        <li key={order.id}>
+                          <span>{order.displayId} · {formatDate(order.createdAt)}</span>
+                          <b><span className={`status status--${order.status}`}>{statusLabels[order.status]}</span> {formatCup(order.totalCup)}</b>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {customers.length === 0 ? (
+            <div className="empty-panel"><strong>Todavía no hay clientes.</strong><span>Aparecerán aquí en cuanto alguien haga su primer pedido.</span></div>
+          ) : customers.map((customer) => (
+            <article className={`customer-row ${customer.status === "pendiente" ? "is-pending" : ""}`} key={customer.id}>
+              <button className="customer-identity" type="button" onClick={() => showCustomer(customer)}>
+                <strong>{customer.name}</strong>
+                <small>{customer.phone} · {customer.orderCount} pedido{customer.orderCount === 1 ? "" : "s"} · {formatCup(customer.totalSpentCup)}</small>
+              </button>
+              <span className={`customer-status customer-status--${customer.status}`}>{customerStatusLabels[customer.status]}</span>
+              <div className="customer-actions">
+                {customer.status !== "aceptado" && (
+                  <button disabled={busy === customer.id} onClick={() => changeCustomerStatus(customer, "aceptado")}>Aceptar</button>
+                )}
+                {customer.status !== "rechazado" && (
+                  <button className="button-link-danger" disabled={busy === customer.id} onClick={() => changeCustomerStatus(customer, "rechazado")}>Rechazar</button>
+                )}
+              </div>
+            </article>
+          ))}
+          <p className="inventory-note">El primer pedido de alguien nuevo crea su solicitud aquí. Aceptar o rechazar no impide que siga comprando: es tu registro de quién es cliente fijo.</p>
         </section>
       ) : (
         <>
