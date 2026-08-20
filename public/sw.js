@@ -1,4 +1,4 @@
-const CACHE_NAME = "don-padron-v5";
+const CACHE_NAME = "don-padron-v6";
 const APP_ROOT = "/donpadron/";
 const CORE_ASSETS = [
   APP_ROOT,
@@ -40,6 +40,9 @@ self.addEventListener("push", (event) => {
       body: data.body,
       icon: `${APP_ROOT}icon-192.png`,
       badge: `${APP_ROOT}icon-192.png`,
+      vibrate: [200, 100, 200],
+      // Un pedido se queda en pantalla hasta que el negocio lo atiende.
+      requireInteraction: true,
     }),
   );
 });

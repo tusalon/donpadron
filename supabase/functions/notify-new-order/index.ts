@@ -82,6 +82,9 @@ Deno.serve(async (req) => {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload,
+          // Sin urgency alta, Android agrupa el aviso y lo entrega tarde para
+          // ahorrar bateria. Un pedido nuevo no sirve media hora despues.
+          { urgency: "high", TTL: 86400 },
         );
         sent += 1;
       } catch (caught) {
