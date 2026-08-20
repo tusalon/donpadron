@@ -5,7 +5,7 @@ import AdminClient from "./AdminClient";
 const TOKEN_KEY = "donpadron_admin_token";
 
 export default function AdminPortal() {
-  const logoUrl = `${import.meta.env.BASE_URL}don-padron-icon.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}icon-192.png`;
   const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) ?? "");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

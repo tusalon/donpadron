@@ -33,7 +33,7 @@ const defaultCheckout: Checkout = {
 };
 
 export default function Storefront() {
-  const logoUrl = `${import.meta.env.BASE_URL}don-padron-icon.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}icon-192.png`;
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [cart, setCart] = useState<Cart>({});

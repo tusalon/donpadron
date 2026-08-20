@@ -78,7 +78,7 @@ type AdminClientProps = {
 };
 
 export default function AdminClient({ token, onLogout, onSessionExpired }: AdminClientProps) {
-  const logoUrl = `${import.meta.env.BASE_URL}don-padron-icon.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}icon-192.png`;
   const storeUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);

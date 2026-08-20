@@ -1,14 +1,21 @@
-const CACHE_NAME = "don-padron-v4";
+const CACHE_NAME = "don-padron-v5";
 const APP_ROOT = "/donpadron/";
 const CORE_ASSETS = [
   APP_ROOT,
   `${APP_ROOT}manifest.webmanifest`,
   `${APP_ROOT}admin.webmanifest`,
-  `${APP_ROOT}don-padron-icon.png`,
+  `${APP_ROOT}icon-192.png`,
 ];
 
+// cache.addAll aborta entero si falla un solo archivo, y con eso el service
+// worker no se instala y la app deja de ser instalable. Se cachea uno a uno
+// para que un fallo de red puntual no tumbe la instalacion completa.
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(CORE_ASSETS.map((asset) => cache.add(asset))),
+    ),
+  );
   self.skipWaiting();
 });
 
@@ -31,8 +38,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: `${APP_ROOT}don-padron-icon.png`,
-      badge: `${APP_ROOT}don-padron-icon.png`,
+      icon: `${APP_ROOT}icon-192.png`,
+      badge: `${APP_ROOT}icon-192.png`,
     }),
   );
 });
@@ -53,6 +60,24 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin || !requestUrl.pathname.startsWith(APP_ROOT)) return;
+
+  // Los archivos de /assets/ llevan un hash del contenido en el nombre: si esta
+  // en cache es el correcto, asi que se sirve sin esperar a la red.
+  if (requestUrl.pathname.startsWith(`${APP_ROOT}assets/`)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            void caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        });
+      }),
+    );
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

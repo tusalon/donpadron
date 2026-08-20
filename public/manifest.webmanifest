@@ -9,8 +9,14 @@
   "theme_color": "#e31e24",
   "icons": [
     {
-      "src": "/donpadron/don-padron-icon.png",
-      "sizes": "1250x1250",
+      "src": "/donpadron/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/donpadron/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }

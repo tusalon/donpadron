@@ -10,7 +10,7 @@ const steps = [
 ];
 
 export default function OrderTracker({ orderId }: { orderId: string }) {
-  const logoUrl = `${import.meta.env.BASE_URL}don-padron-icon.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}icon-192.png`;
   const storeHref = import.meta.env.BASE_URL;
   const [order, setOrder] = useState<TrackedOrder | null>(null);
   const [error, setError] = useState("");
