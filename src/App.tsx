@@ -20,6 +20,15 @@ export default function App() {
     return () => window.removeEventListener("hashchange", updateRoute);
   }, []);
 
+  // Al añadir a pantalla de inicio, Android abre el start_url del manifiesto y
+  // descarta el hash actual. El panel necesita el suyo para no abrir la tienda.
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!link) return;
+    const base = import.meta.env.BASE_URL;
+    link.href = route.name === "admin" ? `${base}admin.webmanifest` : `${base}manifest.webmanifest`;
+  }, [route.name]);
+
   if (route.name === "admin") return <AdminPortal />;
   if (route.name === "order") return <OrderTracker orderId={route.orderId} />;
   return <Storefront />;

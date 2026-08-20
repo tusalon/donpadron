@@ -1,8 +1,9 @@
-const CACHE_NAME = "don-padron-v3";
+const CACHE_NAME = "don-padron-v4";
 const APP_ROOT = "/donpadron/";
 const CORE_ASSETS = [
   APP_ROOT,
   `${APP_ROOT}manifest.webmanifest`,
+  `${APP_ROOT}admin.webmanifest`,
   `${APP_ROOT}don-padron-icon.png`,
 ];
 

@@ -1,0 +1,18 @@
+{
+  "name": "Don Padrón Admin",
+  "short_name": "DP Admin",
+  "description": "Panel de pedidos, inventario y clientes de Don Padrón.",
+  "start_url": "/donpadron/#/admin",
+  "scope": "/donpadron/",
+  "display": "standalone",
+  "background_color": "#fff8f4",
+  "theme_color": "#e31e24",
+  "icons": [
+    {
+      "src": "/donpadron/don-padron-icon.png",
+      "sizes": "1250x1250",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
